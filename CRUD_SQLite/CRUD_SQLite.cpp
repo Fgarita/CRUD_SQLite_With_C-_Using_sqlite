@@ -1,176 +1,269 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <sqlite3.h>
 #include <sstream>
+#include <stdexcept>
+#include <iomanip>
 
 using namespace std;
 
 sqlite3* DB;
 
-// Función para manejar errores
+// FunciÃ³n para manejar errores
 void checkError(int result, const string& errorMessage) {
     if (result != SQLITE_OK) {
-        cout << errorMessage << endl;
+        cerr << "\n[ERROR] " << errorMessage << "\nDetalles: " << sqlite3_errmsg(DB) << "\n" << endl;
         sqlite3_close(DB);
         exit(1);
     }
 }
 
-// Función para mostrar un mensaje al finalizar correctamente
+// FunciÃ³n para mostrar un mensaje al finalizar correctamente
 void showSuccessMessage(const string& message) {
-    cout << message << endl;
+    cout << "\n[âœ”] " << message << "\n" << endl;
 }
 
-// Función para crear la tabla automáticamente
+// FunciÃ³n para crear la tabla automÃ¡ticamente
 void createTable() {
     string sql = R"(CREATE TABLE IF NOT EXISTS USER (
         ID INTEGER PRIMARY KEY AUTOINCREMENT,
         NAME TEXT NOT NULL,
         LASTNAME TEXT NOT NULL,
-        PHONE INTEGER NOT NULL,
+        PHONE TEXT NOT NULL,
         MAIL TEXT NOT NULL
     ))";
+
     int result = sqlite3_exec(DB, sql.c_str(), NULL, 0, 0);
+    cout << "=======================================" << endl;
     checkError(result, "Error al crear la tabla");
-    showSuccessMessage("Tabla verificada/creada automáticamente");
+    showSuccessMessage("Tabla verificada/creada automÃ¡ticamente");
+    cout << "=======================================" << endl;
 }
 
-// Función para insertar datos
+// FunciÃ³n para verificar si un ID existe en la base de datos
+bool doesIDExist(int id) {
+    string sql = "SELECT COUNT(*) FROM USER WHERE ID = ?";
+    sqlite3_stmt* stmt;
+
+    int result = sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    cout << "=======================================" << endl;
+    checkError(result, "Error al preparar la consulta para verificar el ID");
+    cout << "=======================================" << endl;
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    result = sqlite3_step(stmt);
+    if (result != SQLITE_ROW) {
+        cout << "=======================================" << endl;
+        cerr << "\n[ERROR] Error al verificar el ID: " << sqlite3_errmsg(DB) << "\n" << endl;
+        cout << "=======================================" << endl;
+        sqlite3_finalize(stmt);
+        return false;
+    }
+
+    int count = sqlite3_column_int(stmt, 0);
+    sqlite3_finalize(stmt);
+
+    return count > 0;
+}
+
+// FunciÃ³n para insertar datos
 void insertData() {
-    string name, lastname, mail;
-    int phone;
+    string name, lastname, mail, phone;
+    cout << "=======================================" << endl;
 
-    cout << "Ingrese el nombre: ";
-    cin >> name;
-    cout << "Ingrese el apellido: ";
-    cin >> lastname;
-    cout << "Ingrese el teléfono: ";
-    cin >> phone;
-    cout << "Ingrese el correo: ";
-    cin >> mail;
+    cout << "\n[INFO] Ingrese los datos del usuario:\n";
+    cout << "=======================================" << endl;
 
-    string sql = "INSERT INTO USER (NAME, LASTNAME, PHONE, MAIL) VALUES ('" + name + "', '" + lastname + "', " + to_string(phone) + ", '" + mail + "')";
-    int result = sqlite3_exec(DB, sql.c_str(), NULL, 0, 0);
-    checkError(result, "Error al insertar los datos");
-    showSuccessMessage("Datos insertados correctamente");
+    cout << "Nombre: ";
+    cin >> ws;
+    getline(cin, name);
+    cout << "=======================================" << endl;
+
+    cout << "Apellido: ";
+    getline(cin, lastname);
+    cout << "=======================================" << endl;
+
+    cout << "TelÃ©fono: ";
+    getline(cin, phone);
+    cout << "=======================================" << endl;
+
+    cout << "Correo: ";
+    getline(cin, mail);
+    cout << "=======================================" << endl;
+
+    string sql = "INSERT INTO USER (NAME, LASTNAME, PHONE, MAIL) VALUES (?, ?, ?, ?)";
+    sqlite3_stmt* stmt;
+
+    int result = sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    checkError(result, "Error al preparar la consulta");
+
+    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, lastname.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, phone.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, mail.c_str(), -1, SQLITE_STATIC);
+
+    result = sqlite3_step(stmt);
+    if (result != SQLITE_DONE) {
+        cerr << "\n[ERROR] Error al insertar los datos: " << sqlite3_errmsg(DB) << "\n" << endl;
+    }
+    else {
+        showSuccessMessage("Datos insertados correctamente");
+    }
+    sqlite3_finalize(stmt);
 }
 
-// Función para leer datos
+// FunciÃ³n para leer datos
 static int callback(void* NotUsed, int argc, char** argv, char** azColName) {
     for (int i = 0; i < argc; i++) {
-        cout << azColName[i] << ": " << (argv[i] ? argv[i] : "NULL") << endl;
+        cout << left << setw(15) << azColName[i] << ": " << (argv[i] ? argv[i] : "NULL") << endl;
     }
     cout << "---------------------------------" << endl;
     return 0;
 }
 
 void readData() {
+    cout << "=======================================" << endl;
+    cout << "\n[INFO] Leyendo todos los datos:\n";
+    cout << "=======================================" << endl;
     string sql = "SELECT * FROM USER";
     int result = sqlite3_exec(DB, sql.c_str(), callback, 0, 0);
+    cout << "=======================================" << endl;
     checkError(result, "Error al leer los datos");
     showSuccessMessage("Consulta realizada correctamente");
+    cout << "=======================================" << endl;
 }
 
-// Función para actualizar datos
+// FunciÃ³n para actualizar datos
 void updateData() {
-    int id, phone;
-    string name, lastname, mail;
-    string sql = "UPDATE USER SET ";
-
-    cout << "Ingrese el ID del usuario a actualizar: ";
+    int id;
+    cout << "=======================================" << endl;
+    cout << "\n[INFO] Ingrese el ID del usuario a actualizar: ";
     cin >> id;
 
+    if (!doesIDExist(id)) {
+        cout << "=======================================" << endl;
+        cerr << "\n[ERROR] El ID ingresado no existe en la base de datos.\n" << endl;
+        cout << "=======================================" << endl;
+        return;
+    }
+
+    string sql = "UPDATE USER SET ";
+    sqlite3_stmt* stmt;
+
+    string fields[4] = { "NAME", "LASTNAME", "PHONE", "MAIL" };
+    string newValues[4];
     bool isFirstField = true;
 
-    cout << "¿Desea actualizar el nombre? (s/n): ";
-    char option;
-    cin >> option;
-    if (option == 's' || option == 'S') {
-        cout << "Ingrese el nuevo nombre: ";
-        cin >> name;
-        if (!isFirstField) sql += ", ";
-        sql += "NAME = '" + name + "'";
-        isFirstField = false;
+    for (int i = 0; i < 4; i++) {
+        cout << "=======================================" << endl;
+        cout << "Â¿Desea actualizar " << fields[i] << "? (s/n): ";
+        cout << "=======================================" << endl;
+        char option;
+        cin >> option;
+        if (option == 's' || option == 'S') {
+            cout << "=======================================" << endl;
+            cout << "Ingrese el nuevo valor para " << fields[i] << ": ";
+            cout << "=======================================" << endl;
+            cin >> ws;
+            getline(cin, newValues[i]);
+            if (!isFirstField) sql += ", ";
+            sql += fields[i] + " = ?";
+            isFirstField = false;
+        }
     }
 
-    cout << "¿Desea actualizar el apellido? (s/n): ";
-    cin >> option;
-    if (option == 's' || option == 'S') {
-        cout << "Ingrese el nuevo apellido: ";
-        cin >> lastname;
-        if (!isFirstField) sql += ", ";
-        sql += "LASTNAME = '" + lastname + "'";
-        isFirstField = false;
+    if (isFirstField) {
+        cout << "=======================================" << endl;
+        cout << "\n[INFO] No se actualizÃ³ ningÃºn campo.\n" << endl;
+        cout << "=======================================" << endl;
+        return;
     }
 
-    cout << "¿Desea actualizar el teléfono? (s/n): ";
-    cin >> option;
-    if (option == 's' || option == 'S') {
-        cout << "Ingrese el nuevo teléfono: ";
-        cin >> phone;
-        if (!isFirstField) sql += ", ";
-        sql += "PHONE = " + to_string(phone);
-        isFirstField = false;
+    sql += " WHERE ID = ?";
+    int result = sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    cout << "=======================================" << endl;
+    checkError(result, "Error al preparar la consulta de actualizaciÃ³n");
+    cout << "=======================================" << endl;
+
+    int paramIndex = 1;
+    for (const auto& value : newValues) {
+        if (!value.empty()) {
+            sqlite3_bind_text(stmt, paramIndex++, value.c_str(), -1, SQLITE_STATIC);
+        }
     }
+    sqlite3_bind_int(stmt, paramIndex, id);
 
-    cout << "¿Desea actualizar el correo electrónico? (s/n): ";
-    cin >> option;
-    if (option == 's' || option == 'S') {
-        cout << "Ingrese el nuevo correo electrónico: ";
-        cin >> mail;
-        if (!isFirstField) sql += ", ";
-        sql += "MAIL = '" + mail + "'";
-        isFirstField = false;
-    }
-
-    // Finalizar la consulta SQL con la condición de ID
-    sql += " WHERE ID = " + to_string(id);
-
-    // Mostrar la consulta SQL para depuración
-    cout << "Consulta SQL: " << sql << endl;
-
-    // Ejecutar la consulta
-    int result = sqlite3_exec(DB, sql.c_str(), NULL, 0, 0);
-
-    // Comprobar si hubo algún error en la ejecución de la consulta
-    if (result != SQLITE_OK) {
-        cerr << "Error al ejecutar la consulta: " << sqlite3_errmsg(DB) << endl;
+    result = sqlite3_step(stmt);
+    if (result != SQLITE_DONE) {
+        cout << "=======================================" << endl;
+        cerr << "\n[ERROR] Error al actualizar los datos: " << sqlite3_errmsg(DB) << "\n" << endl;
+        cout << "=======================================" << endl;
     }
     else {
+        cout << "=======================================" << endl;
         showSuccessMessage("Datos actualizados correctamente");
+        cout << "=======================================" << endl;
     }
+    sqlite3_finalize(stmt);
 }
 
-
-// Función para eliminar datos
+// FunciÃ³n para eliminar datos
 void deleteData() {
     int id;
-    cout << "Ingrese el ID del usuario a eliminar: ";
+    cout << "=======================================" << endl;
+    cout << "\n[INFO] Ingrese el ID del usuario a eliminar: ";
     cin >> id;
 
-    string sql = "DELETE FROM USER WHERE ID = " + to_string(id);
-    int result = sqlite3_exec(DB, sql.c_str(), NULL, 0, 0);
-    checkError(result, "Error al eliminar los datos");
-    showSuccessMessage("Datos eliminados correctamente");
+    if (!doesIDExist(id)) {
+        cout << "=======================================" << endl;
+        cerr << "\n[ERROR] El ID ingresado no existe en la base de datos.\n" << endl;
+        cout << "=======================================" << endl;
+        return;
+    }
+
+    string sql = "DELETE FROM USER WHERE ID = ?";
+    sqlite3_stmt* stmt;
+
+    int result = sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    cout << "=======================================" << endl;
+    checkError(result, "Error al preparar la consulta de eliminaciÃ³n");
+    cout << "=======================================" << endl;
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    result = sqlite3_step(stmt);
+    if (result != SQLITE_DONE) {
+        cout << "=======================================" << endl;
+        cerr << "\n[ERROR] Error al eliminar los datos: " << sqlite3_errmsg(DB) << "\n" << endl;
+        cout << "=======================================" << endl;
+    }
+    else {
+        cout << "=======================================" << endl;
+        showSuccessMessage("Datos eliminados correctamente");
+        cout << "=======================================" << endl;
+    }
+    sqlite3_finalize(stmt);
 }
 
-// Función para mostrar el menú
+// FunciÃ³n para mostrar el menÃº
 void showMenu() {
-    cout << "\n--- Menú CRUD SQLite ---" << endl;
+    cout << "\n========== MenÃº CRUD SQLite ==========" << endl;
     cout << "1. Insertar datos" << endl;
     cout << "2. Leer datos" << endl;
     cout << "3. Actualizar datos" << endl;
     cout << "4. Eliminar datos" << endl;
     cout << "5. Salir" << endl;
-    cout << "Seleccione una opción: ";
+    cout << "=======================================" << endl;
+    cout << "Seleccione una opciÃ³n: ";
 }
 
 int main() {
-    // Abrir la base de datos
     string file = "./database.db";
     int result = sqlite3_open(file.c_str(), &DB);
+    cout << "=======================================" << endl;
     checkError(result, "Error al abrir la base de datos");
+    cout << "=======================================" << endl;
 
-    // Crear la tabla automáticamente
     createTable();
 
     int option;
@@ -192,16 +285,17 @@ int main() {
             deleteData();
             break;
         case 5:
-            cout << "Saliendo del programa..." << endl;
+            cout << "=======================================" << endl;
+            cout << "\n[INFO] Saliendo del programa...\n" << endl;
+            cout << "=======================================" << endl;
             break;
         default:
-            cout << "Opción no válida. Inténtelo de nuevo." << endl;
+            cout << "=======================================" << endl;
+            cout << "\n[ERROR] OpciÃ³n no vÃ¡lida. IntÃ©ntelo de nuevo.\n" << endl;
+            cout << "=======================================" << endl;
         }
     } while (option != 5);
 
-    // Cerrar la base de datos
     sqlite3_close(DB);
-
     return 0;
 }
-
