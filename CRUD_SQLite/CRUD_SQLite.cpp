@@ -157,13 +157,11 @@ void updateData() {
     for (int i = 0; i < 4; i++) {
         cout << "=======================================" << endl;
         cout << "¿Desea actualizar " << fields[i] << "? (s/n): ";
-        cout << "=======================================" << endl;
         char option;
         cin >> option;
         if (option == 's' || option == 'S') {
             cout << "=======================================" << endl;
             cout << "Ingrese el nuevo valor para " << fields[i] << ": ";
-            cout << "=======================================" << endl;
             cin >> ws;
             getline(cin, newValues[i]);
             if (!isFirstField) sql += ", ";
